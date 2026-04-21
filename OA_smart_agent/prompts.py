@@ -288,26 +288,25 @@ STRICT_GENERATE_LV2_TEMPLATE = ChatPromptTemplate(
 
 QUERY_REWRITE_TEMPLATE = ChatPromptTemplate(
     message_templates=[
-        SystemMessage(content="你是一个专业的企业 OA 知识库检索专家。"),
-        HumanMessage(content="""你是企业 OA 助手的【查询重写专家】。
-
-任务：当首次检索效果不佳时，对原始查询进行优化重写，提高二次检索的召回率。
+        SystemMessage(content="你是一个专业的企业 OA 知识库检索优化专家，只输出符合要求的 JSON。"),
+        HumanMessage(content="""任务：当首次检索效果不佳时，请分析原因并对原始查询进行优化重写，提高二次检索的命中率。
 
 【原始查询】
 {query}
 
-【原始检索结果】（效果不好，被判定为 NO_EVIDENCE 或 FACTUAL_ERROR）
+【原始检索结果】（效果不好，被判定为无依据或有事实错误）
 {old_docs_text}
 
 【重写策略】（选择性组合使用）：
 1. 查询扩展：添加同义词、相关术语（如"报销"→"报销/发票/贴票/财务审批"）
-2. 查询分解：将复杂问题拆分为多个子查询（每个子查询独立检索）
+2. 查询分解：将复杂问题拆分为多个子查询
 3. 查询泛化：从具体到抽象（如"年会礼品报销"→"公司报销制度/福利标准"）
 4. 查询具体化：从抽象到具体（如"报销流程"→"差旅费报销流程/发票粘贴规范"）
 5. 补充上下文：添加公司/部门/岗位相关的限定词
 
-【输出格式】（JSON）
+【输出格式】（严格遵循 JSON）
 {{
+  "failure_analysis": "简要分析为什么给出的原始检索结果无法解决原始查询的问题。",
   "rewritten_queries": [
     {{
       "query": "重写后的查询语句",
@@ -315,14 +314,14 @@ QUERY_REWRITE_TEMPLATE = ChatPromptTemplate(
       "reason": "为什么这样重写"
     }}
   ],
-  "final_query": "综合多个策略后用于最终检索的主查询"
+  "final_query": "综合多个策略后用于最终检索的主查询（注意：需适合混合检索，既要包含核心自然语言语义，也要补充关键实体词汇）"
 }}
 
 要求：
-1. 生成 2-4 个不同的重写查询，覆盖不同策略
-2. 最终选择 1 个最优查询用于检索
-3. 保持查询在 OA 知识库检索的有效范围内
-4. 只输出 JSON，不要有其他文字。"""),
+1. 先进行 failure_analysis 反思。
+2. 生成 2-3 个不同的重写查询方案。
+3. 最终选择 1 个最优查询用于检索，存入 final_query。
+4. 只输出 JSON，不要有任何其他文字说明。"""),
     ],
 )
 
