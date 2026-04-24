@@ -89,22 +89,6 @@ async def _update_session_metrics_after_approval():
     except Exception:
         pass
 
-def build_draft_action_from_state(state: dict) -> DraftAction:
-    """
-    从Agent状态构建草稿操作对象
-    """
-    action_payload = state.get("action_payload", {})  
-    messages = state.get("messages", [])  
-    latest_msg = messages[-1].content if messages else "" 
-    params = action_payload.get("params", state.get("extracted_params", {}))  
-
-    # 构建草稿操作
-    return DraftAction(
-        action_type=action_payload.get("action_type", "unknown"), 
-        extracted_params=params,  
-        payload=action_payload,  
-        confirmation_message=latest_msg,  
-    )
 
 # =============================================================================
 # 聊天接口 - 异步 SSE 模式
@@ -542,79 +526,6 @@ async def approve_endpoint(
             message="操作已取消。",
         )
 
-
-
-@router.get("/session/{session_id}/status")
-async def get_session_status(
-    request: Request,
-    session_id: str,
-    token_info: TokenPayload = Depends(verify_token),
-) -> dict:
-    """
-  
-    """
-    trace_id = getattr(request.state, "trace_id", "")
-
-    graph = get_agent_graph()
-    config = {
-        "configurable": {
-            "thread_id": session_id,
-        }
-    }
-
-    try:
-        state = graph.get_state(config)
-        if not state or not state.values:
-            return {"session_id": session_id, "status": "not_found"}
-
-        requires_approval = state.values.get("requires_approval", False)
-
-       
-        session_user_id = state.values.get("user_id", "")
-        if session_user_id and session_user_id != token_info.user_id:
-            logger.warning(
-                "session_access_denied",
-                extra={
-                    "session_id": session_id,
-                    "session_user_id": session_user_id,
-                    "request_user_id": token_info.user_id,
-                    "trace_id": trace_id,
-                    "component": "api",
-                }
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="鏃犳潈璁块棶姝や細璇濓紝鍙兘鏌ョ湅鑷繁鐨勪細璇?
-            )
-
-        if requires_approval:
-            return {
-                "session_id": session_id,
-                "status": "awaiting_approval",
-                "draft_action": build_draft_action_from_state(state.values).model_dump(),
-            }
-        else:
-            return {
-                "session_id": session_id,
-                "status": "completed",
-                "final_response": state.values.get("final_response", ""),
-            }
-
-    except Exception as e:
-        logger.error(
-            "session_status_error",
-            extra={
-                "trace_id": trace_id,
-                "session_id": session_id,
-                "error": str(e),
-                "component": "api",
-            }
-        )
-        return {
-            "session_id": session_id,
-            "status": "error",
-            "message": str(e),
-        }
 
 def split_text_for_streaming(text: str, chunk_size: int = 20) -> list:
     """
