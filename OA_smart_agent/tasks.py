@@ -431,19 +431,9 @@ def submit_chat_task(
         # 构建输入状态
         # ─────────────────────────────────────────
         
-        # 如果是继续对话，恢复历史消息
-        if is_resuming_session and restored_state.get("messages"):
-            # 追加新消息而不是替换
-            existing_messages = list(restored_state.get("messages", []))
-            existing_messages.append(HumanMessage(content=query))
-            messages_input = existing_messages
-        else:
-            # 新对话
-            messages_input = [HumanMessage(content=query)]
-
         # 构建初始状态（ReAct 模式简化版）
         input_state: AgentState = {
-            "messages": messages_input,
+            "messages": [HumanMessage(content=query)],
             "user_token": user_token,
             "interrupted": False,
             "retrieved_docs": None,
@@ -539,10 +529,10 @@ def submit_chat_task(
 
                     # 创建临时文件
                     import tempfile
+                    tmp_path = None
                     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as tmp_file:
                         tmp_file.write(file_bytes)
                         tmp_path = tmp_file.name
-
                     try:
                         # 根据文件类型选择解析器
                         if file_ext == "pdf":
@@ -692,7 +682,7 @@ def submit_chat_task(
         
         # 流结束后，获取最终状态以检查中断和工具调用
         latest_state = graph.get_state(config)
-        is_interrupted = latest_state.metadata.get("interrupted", False) if latest_state.metadata else False
+        is_interrupted = len(latest_state.next) > 0
         
         # 获取消息列表用于后续工具调用检查
         messages = latest_state.values.get("messages", [])
@@ -712,7 +702,7 @@ def submit_chat_task(
                 last_message
                 and hasattr(last_message, 'tool_calls')
                 and last_message.tool_calls
-                and any(tc.name in APPROVAL_REQUIRED_TOOLS for tc in last_message.tool_calls)
+                and any(tc.get("name","") in APPROVAL_REQUIRED_TOOLS for tc in last_message.tool_calls)
             )
             else []
         )
@@ -741,7 +731,7 @@ def submit_chat_task(
         requires_approval = is_interrupted or has_pending_tools
         draft_action_data = None
         
-       if requires_approval:
+        if requires_approval:
             draft_action_data = None
             tool_info = pending_tool_calls[0] if pending_tool_calls else None
             
